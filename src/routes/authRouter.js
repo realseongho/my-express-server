@@ -85,4 +85,9 @@ router.delete("/delete-account", async (req, res) => {
   }
 });
 
+// 세션 읽기
+router.get("/get-session", (req, res) => {
+  const username = req.user.id;
+  res.send(`Session value: ${username}`);
+});
 export default router;

@@ -28,7 +28,7 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 app.use("/api/auth", authRouter);
-app.use("/api/todos", todosRouter);
+app.use("/api/todos", authHandler.checkAuthentication, todosRouter);
 app.use("/api/users", authHandler.checkAuthentication, usersRouter);
 
 app.listen(3000, () => {

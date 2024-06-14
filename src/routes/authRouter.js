@@ -2,6 +2,10 @@ import { Router } from "express";
 import passport from "passport";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import {
+  generateAccessToken,
+  generateRefreshToken,
+} from "../utils/authUtils.js";
 
 const router = Router();
 
@@ -13,27 +17,51 @@ router.post("/login", (req, res, next) => {
     if (!user) {
       return res.status(401).json({ message: "Authentication failed" });
     }
-    req.logIn(user, { session: false }, (err) => {
+    req.logIn(user, { session: false }, async (err) => {
       if (err) {
         return next(err);
       }
-      const accessToken = jwt.sign(
-        { id: user._id, username: user.username },
-        "kitri_secret",
-        { expiresIn: "10m" }
-      );
-      return res.status(200).json({ accessToken });
+      const accessToken = generateAccessToken(user);
+      const refreshToken = generateRefreshToken(user);
+
+      user.refreshToken = refreshToken;
+      await user.save();
+
+      return res.status(200).json({ accessToken, refreshToken });
     });
   })(req, res, next);
 });
 
-router.get("/logout", (req, res) => {
-  req.logout((err) => {
-    if (err) {
-      return next(err);
-    }
+router.post("/refresh-token", async (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) return res.sendStatus(401);
+  try {
+    const user = await User.findOne({ refreshToken });
+    if (!user) return res.sendStatus(403);
+    jwt.verify(refreshToken, "kitri_secret2", (err, decoded) => {
+      if (err) return res.sendStatus(403);
+      const accessToken = generateAccessToken(user);
+      return res.json({ accessToken });
+    });
+  } catch (err) {
+    return res.sendStatus(500);
+  }
+});
+
+router.post("/logout", async (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) return res.sendStatus(401);
+  try {
+    const user = await User.findOne({ refreshToken });
+    if (!user) return res.sendStatus(403);
+
+    user.refreshToken = null;
+    await user.save();
+
     res.status(200).json({ message: "Logged out successfully" });
-  });
+  } catch (err) {
+    return res.sendStatus(500);
+  }
 });
 
 router.post("/join", async (req, res) => {
